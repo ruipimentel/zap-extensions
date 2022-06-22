@@ -22,13 +22,22 @@ package org.zaproxy.zap.extension.fuzz.httpfuzzer.processors;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.util.Iterator;
+import java.util.TreeSet;
+
 import org.parosproxy.paros.Constant;
+import org.parosproxy.paros.network.HtmlParameter;
 import org.parosproxy.paros.network.HttpMessage;
+import org.parosproxy.paros.network.HttpResponseHeader;
 import org.zaproxy.zap.extension.anticsrf.AntiCsrfToken;
 import org.zaproxy.zap.extension.anticsrf.ExtensionAntiCSRF;
 import org.zaproxy.zap.extension.fuzz.httpfuzzer.HttpFuzzResult;
 import org.zaproxy.zap.extension.fuzz.httpfuzzer.HttpFuzzerMessageProcessor;
 import org.zaproxy.zap.extension.fuzz.httpfuzzer.HttpFuzzerTaskProcessorUtils;
+
+// Custom RUI:
+import java.util.ArrayList;
+import java.net.HttpCookie;
 
 public class AntiCsrfHttpFuzzerMessageProcessor implements HttpFuzzerMessageProcessor {
 
@@ -41,6 +50,10 @@ public class AntiCsrfHttpFuzzerMessageProcessor implements HttpFuzzerMessageProc
     private ExtensionAntiCSRF extensionAntiCSRF;
     private AntiCsrfToken acsrfToken;
     private boolean showTokenRequests;
+    
+    // Custom RUI:
+    private String sessionKey;
+    private String sessionToken;
 
     public AntiCsrfHttpFuzzerMessageProcessor(
             ExtensionAntiCSRF extensionAntiCSRF,
@@ -73,6 +86,14 @@ public class AntiCsrfHttpFuzzerMessageProcessor implements HttpFuzzerMessageProc
 
         // If we've got a token value here then the AntiCSRF extension must have been registered
         String tokenValue = extensionAntiCSRF.getTokenValue(tokenMessage, acsrfToken.getName());
+        
+        // Custom RUI:
+        if (sessionToken != null) {
+        	ArrayList<HttpCookie> cookies = new ArrayList<HttpCookie>();
+        	cookies.add(new HttpCookie(sessionKey, sessionToken));
+        	message.getRequestHeader().setCookies(cookies);
+        }
+        
         if (tokenValue != null) {
             // Replace token value - only supported in the body right now
             String replaced = message.getRequestBody().toString();
@@ -96,6 +117,23 @@ public class AntiCsrfHttpFuzzerMessageProcessor implements HttpFuzzerMessageProc
 
     @Override
     public boolean processResult(HttpFuzzerTaskProcessorUtils utils, HttpFuzzResult fuzzResult) {
+    	// Custom RUI:
+    	HttpMessage message = fuzzResult.getHttpMessage();
+    	if (message != null) {
+    		HttpResponseHeader responseHeader = message.getResponseHeader();
+    		if (responseHeader != null) {
+    			TreeSet<HtmlParameter> cookieParams = responseHeader.getCookieParams();
+    			if (cookieParams != null) {
+    				for (Iterator iterator = cookieParams.iterator(); iterator.hasNext();) {
+						HtmlParameter htmlParameter = (HtmlParameter) iterator.next();
+						if (htmlParameter.getName().compareTo("session") == 0) {
+							sessionKey = htmlParameter.getName();
+							sessionToken = htmlParameter.getValue();
+						}
+					}
+    			}
+    		}
+    	}
         return true;
     }
 }

@@ -25,6 +25,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.parosproxy.paros.Constant;
 import org.parosproxy.paros.network.HttpMessage;
+import org.parosproxy.paros.network.HttpResponseHeader;
 import org.parosproxy.paros.network.HttpSender;
 import org.zaproxy.zap.extension.fuzz.AbstractFuzzerTask;
 
@@ -52,6 +53,13 @@ public class HttpFuzzerTask extends AbstractFuzzerTask<HttpMessage> {
         if (messageSent == null) {
             return;
         }
+        
+        // Custom RUI:
+        HttpResponseHeader responseHeader = messageSent.getResponseHeader();
+        if (responseHeader != null) {
+        	LOGGER.info(responseHeader.toString());
+        }
+
         getParent().messageSent(getId(), messageSent);
 
         HttpFuzzResult result =

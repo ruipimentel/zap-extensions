@@ -1,4 +1,4 @@
-package testclasspath;
+package org.zaproxy.addon.kotlin.testclasspath;
 
 public class TestClassOne {
     public TestClassOne() {

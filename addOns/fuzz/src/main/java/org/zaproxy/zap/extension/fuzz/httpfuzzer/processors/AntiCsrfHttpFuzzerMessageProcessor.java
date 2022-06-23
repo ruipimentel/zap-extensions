@@ -54,6 +54,7 @@ public class AntiCsrfHttpFuzzerMessageProcessor implements HttpFuzzerMessageProc
     // Custom RUI:
     private String sessionKey;
     private String sessionToken;
+    private String antiCsrfToken;
 
     public AntiCsrfHttpFuzzerMessageProcessor(
             ExtensionAntiCSRF extensionAntiCSRF,
@@ -93,8 +94,13 @@ public class AntiCsrfHttpFuzzerMessageProcessor implements HttpFuzzerMessageProc
         	cookies.add(new HttpCookie(sessionKey, sessionToken));
         	message.getRequestHeader().setCookies(cookies);
         }
+
+        if (tokenValue == null) {
+            tokenValue = antiCsrfToken;
+        }
         
         if (tokenValue != null) {
+            antiCsrfToken = tokenValue;
             // Replace token value - only supported in the body right now
             String replaced = message.getRequestBody().toString();
             try {
@@ -124,8 +130,8 @@ public class AntiCsrfHttpFuzzerMessageProcessor implements HttpFuzzerMessageProc
     		if (responseHeader != null) {
     			TreeSet<HtmlParameter> cookieParams = responseHeader.getCookieParams();
     			if (cookieParams != null) {
-    				for (Iterator iterator = cookieParams.iterator(); iterator.hasNext();) {
-						HtmlParameter htmlParameter = (HtmlParameter) iterator.next();
+    				for (Iterator<HtmlParameter> iterator = cookieParams.iterator(); iterator.hasNext();) {
+						HtmlParameter htmlParameter = iterator.next();
 						if (htmlParameter.getName().compareTo("session") == 0) {
 							sessionKey = htmlParameter.getName();
 							sessionToken = htmlParameter.getValue();

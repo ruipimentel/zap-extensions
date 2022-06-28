@@ -76,6 +76,16 @@ public class AntiCsrfHttpFuzzerMessageProcessor implements HttpFuzzerMessageProc
     @Override
     public HttpMessage processMessage(HttpFuzzerTaskProcessorUtils utils, HttpMessage message) {
         HttpMessage tokenMessage = this.acsrfToken.getMsg().cloneAll();
+
+        // Custom RUI:
+        // Sets up the session in the token ("Anti-CSRF Token Refresh") message:
+        setSessionToken(tokenMessage);
+
+        // Custom RUI:
+        // TO DO: REFACTOR! We must not hardcode the method as "GET", but rather
+        // offer a proper GUI element for the selection of both URL and method:
+        tokenMessage.getRequestHeader().setMethod("GET");
+
         if (!utils.sendMessage(tokenMessage)) {
             utils.increaseErrorCount(ERROR_MESSAGE);
             return message;
@@ -87,13 +97,14 @@ public class AntiCsrfHttpFuzzerMessageProcessor implements HttpFuzzerMessageProc
 
         // If we've got a token value here then the AntiCSRF extension must have been registered
         String tokenValue = extensionAntiCSRF.getTokenValue(tokenMessage, acsrfToken.getName());
-        
+
         // Custom RUI:
-        if (sessionToken != null) {
-        	ArrayList<HttpCookie> cookies = new ArrayList<HttpCookie>();
-        	cookies.add(new HttpCookie(sessionKey, sessionToken));
-        	message.getRequestHeader().setCookies(cookies);
-        }
+        // Detects "Set-cookie" HTTP Response Headers:
+        detectSessionChange(tokenMessage);
+
+        // Custom RUI:
+        // Sets up the session in the fuzzed message:
+        setSessionToken(message);
 
         if (tokenValue == null) {
             tokenValue = antiCsrfToken;
@@ -123,23 +134,53 @@ public class AntiCsrfHttpFuzzerMessageProcessor implements HttpFuzzerMessageProc
 
     @Override
     public boolean processResult(HttpFuzzerTaskProcessorUtils utils, HttpFuzzResult fuzzResult) {
-    	// Custom RUI:
-    	HttpMessage message = fuzzResult.getHttpMessage();
-    	if (message != null) {
-    		HttpResponseHeader responseHeader = message.getResponseHeader();
-    		if (responseHeader != null) {
-    			TreeSet<HtmlParameter> cookieParams = responseHeader.getCookieParams();
-    			if (cookieParams != null) {
-    				for (Iterator<HtmlParameter> iterator = cookieParams.iterator(); iterator.hasNext();) {
-						HtmlParameter htmlParameter = iterator.next();
-						if (htmlParameter.getName().compareTo("session") == 0) {
-							sessionKey = htmlParameter.getName();
-							sessionToken = htmlParameter.getValue();
-						}
-					}
-    			}
-    		}
-    	}
+        // Custom RUI:
+        detectSessionChange(fuzzResult.getHttpMessage());
         return true;
+    }
+
+    /**
+     * Sets up the session cookie key-value pair in the specified message,
+     * unless there is no session token detected so far in the current execution
+     * of the fuzzer.
+     *
+     * @param message Message where the session cookie will be set up.
+     */
+    private void setSessionToken(HttpMessage message) {
+        if (sessionToken != null) {
+            ArrayList<HttpCookie> cookies = new ArrayList<HttpCookie>();
+
+            // Creates a session key-value pair using the detected settings:
+            cookies.add(new HttpCookie(sessionKey, sessionToken));
+
+            // Sets up the session in the specified HTTP request:
+            message.getRequestHeader().setCookies(cookies);
+        }
+    }
+
+    /**
+     * Detects a "Set-cookie" HTTP response header in the specified message.
+     *
+     * @param message Message where the session cookie will be set up.
+     */
+    private void detectSessionChange(HttpMessage message) {
+        // Custom RUI:
+        if (message != null) {
+            HttpResponseHeader responseHeader = message.getResponseHeader();
+            if (responseHeader != null) {
+                TreeSet<HtmlParameter> cookieParams = responseHeader.getCookieParams();
+                if (cookieParams != null) {
+                    for (Iterator<HtmlParameter> iterator = cookieParams.iterator(); iterator.hasNext();) {
+                        HtmlParameter htmlParameter = iterator.next();
+                        // TO DO: REFACTOR! We must look for any of the possible
+                        // session keys, not only for "session" specifically:
+                        if (htmlParameter.getName().compareTo("session") == 0) {
+                            sessionKey = htmlParameter.getName();
+                            sessionToken = htmlParameter.getValue();
+                        }
+                    }
+                }
+            }
+        }
     }
 }
